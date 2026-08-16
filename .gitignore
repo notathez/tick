@@ -1,0 +1,13 @@
+# Binaries
+tick
+*.exe
+
+# Runtime data
+.tick/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
