@@ -7,7 +7,7 @@
 Install the latest version using Go:
 
 ```bash
-go install github.com/your-username/tick@latest
+go install github.com/notathez/tick@latest
 ```
 
 After installation, you can run:
