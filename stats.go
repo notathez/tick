@@ -16,7 +16,8 @@ type ActivityStat struct {
 }
 
 // showStats calculates and displays aggregated time tracking metrics by day, week, month, or all-time.
-func showStats(periodArg string) {
+// If activityFilter is non-empty, it delegates to showActivityStats for a focused single-activity view.
+func showStats(periodArg string, activityFilter string) {
 	tickData, err := load()
 	if err != nil {
 		fmt.Printf("Error loading data: %v\n", err)
@@ -61,6 +62,11 @@ func showStats(periodArg string) {
 		fmt.Println("  -w, --week    This week's statistics")
 		fmt.Println("  -m, --month   This month's statistics")
 		fmt.Println("  -a, --all     All-time statistics")
+		return
+	}
+
+	if activityFilter != "" {
+		showActivityStats(tickData, activityFilter, periodTitle, startTime, endTime)
 		return
 	}
 
@@ -149,6 +155,138 @@ func showStats(periodArg string) {
 	fmt.Printf(" TOTAL TIME SPENT: %s across %d activities\n", formatDuration(totalDuration), len(statsList))
 	if activeActivity != "" && activeElapsed > 0 {
 		fmt.Printf(" (* Includes %s currently in progress for \"%s\")\n", formatDuration(activeElapsed), activeActivity)
+	}
+	fmt.Println("==========================================================================================")
+}
+
+// showActivityStats displays daily aggregated time spent on a specific activity.
+func showActivityStats(tickData TickData, activityFilter string, periodTitle string, startTime time.Time, endTime time.Time) {
+	filter := strings.ToLower(strings.TrimSpace(activityFilter))
+
+	type dayStat struct {
+		date     string    // YYYY-MM-DD
+		dayTime  time.Time // for formatting & sorting
+		duration int64
+		sessions int
+		hasActive bool
+	}
+
+	dailyMap := make(map[string]*dayStat)
+	var totalDuration int64
+	var totalSessions int
+
+	for _, entry := range tickData.History {
+		if entry.Activity == "" || entry.Start.IsZero() {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(entry.Activity), filter) {
+			continue
+		}
+		if (entry.Start.Equal(startTime) || entry.Start.After(startTime)) && entry.Start.Before(endTime) {
+			dayKey := entry.Start.Format("2006-01-02")
+			stat, exists := dailyMap[dayKey]
+			if !exists {
+				stat = &dayStat{
+					date:    dayKey,
+					dayTime: entry.Start,
+				}
+				dailyMap[dayKey] = stat
+			}
+			stat.duration += entry.Duration
+			stat.sessions++
+			totalDuration += entry.Duration
+			totalSessions++
+		}
+	}
+
+	// Include currently active session if it matches
+	activeActivity := tickData.Current.Activity
+	var activeElapsed int64
+	if activeActivity != "" && strings.Contains(strings.ToLower(activeActivity), filter) {
+		if (tickData.Current.Start.Equal(startTime) || tickData.Current.Start.After(startTime)) && tickData.Current.Start.Before(endTime) {
+			activeElapsed = int64(time.Since(tickData.Current.Start).Seconds())
+			if activeElapsed > 0 {
+				dayKey := tickData.Current.Start.Format("2006-01-02")
+				stat, exists := dailyMap[dayKey]
+				if !exists {
+					stat = &dayStat{
+						date:    dayKey,
+						dayTime: tickData.Current.Start,
+					}
+					dailyMap[dayKey] = stat
+				}
+				stat.duration += activeElapsed
+				stat.sessions++
+				stat.hasActive = true
+				totalDuration += activeElapsed
+				totalSessions++
+			}
+		}
+	}
+
+	fmt.Println("==========================================================================================")
+	fmt.Printf(" ACTIVITY STATS: \"%s\" | %s\n", activityFilter, periodTitle)
+	fmt.Println("==========================================================================================")
+
+	if len(dailyMap) == 0 {
+		fmt.Println(" No activity tracked for this during the selected period.")
+		fmt.Println("------------------------------------------------------------------------------------------")
+		fmt.Println(" Tip: Activity name is matched by partial, case-insensitive search.")
+		fmt.Println("==========================================================================================")
+		return
+	}
+
+	var daysList []*dayStat
+	for _, stat := range dailyMap {
+		daysList = append(daysList, stat)
+	}
+
+	// Sort days chronologically
+	sort.Slice(daysList, func(i, j int) bool {
+		return daysList[i].date < daysList[j].date
+	})
+
+	fmt.Printf(" %-12s %-10s %-15s %-10s %-25s\n", "DATE", "DAY", "TIME SPENT", "SESSIONS", "SHARE")
+	fmt.Println("------------------------------------------------------------------------------------------")
+
+	for _, d := range daysList {
+		pct := 0.0
+		if totalDuration > 0 {
+			pct = (float64(d.duration) / float64(totalDuration)) * 100.0
+		}
+		timeStr := formatDuration(d.duration)
+		if d.hasActive {
+			timeStr += " *"
+		}
+		fmt.Printf(" %-12s %-10s %-15s %-10d %6.1f%%   %-20s\n",
+			d.date,
+			d.dayTime.Format("Monday"),
+			timeStr,
+			d.sessions,
+			pct,
+			renderProgressBar(pct, 15),
+		)
+	}
+
+	fmt.Println("------------------------------------------------------------------------------------------")
+
+	avgPerDay := totalDuration / int64(len(daysList))
+	avgPerSession := int64(0)
+	if totalSessions > 0 {
+		avgPerSession = totalDuration / int64(totalSessions)
+	}
+
+	fmt.Printf(" Total Time: %s across %d day(s) (%d session(s))\n",
+		formatDuration(totalDuration),
+		len(daysList),
+		totalSessions,
+	)
+	fmt.Printf(" Daily Average: %s/active day | Avg per session: %s\n",
+		formatDuration(avgPerDay),
+		formatDuration(avgPerSession),
+	)
+	if activeElapsed > 0 {
+		fmt.Printf(" (* Includes %s currently in progress)\n", formatDuration(activeElapsed))
 	}
 	fmt.Println("==========================================================================================")
 }

@@ -39,7 +39,15 @@ tick status
 View your statistics:
 
 ```bash
-tick stats
+tick stats              # Today's stats for all activities
+tick stats -w           # This week's stats
+tick stats -m           # This month's stats
+tick stats -a           # All-time stats
+
+# Specific activity stats:
+tick stats -w programming   # Week stats for "programming"
+tick stats -m coding        # Month stats for "coding"
+tick stats drawing          # Today's stats for "drawing"
 ```
 
 ## Data

@@ -38,10 +38,21 @@ func main() {
 
 	case "stats", "stat":
 		period := ""
-		if len(os.Args) >= 3 {
-			period = os.Args[2]
+		activityFilter := ""
+		extraArgs := os.Args[2:]
+
+		if len(extraArgs) > 0 {
+			if isPeriodFlag(extraArgs[0]) {
+				period = extraArgs[0]
+				if len(extraArgs) > 1 {
+					activityFilter = strings.Join(extraArgs[1:], " ")
+				}
+			} else {
+				// No period flag — treat entire remainder as activity name
+				activityFilter = strings.Join(extraArgs, " ")
+			}
 		}
-		showStats(period)
+		showStats(period, activityFilter)
 
 	case "help", "--help", "-h":
 		showHelp()
@@ -64,12 +75,14 @@ func showHelp() {
 	fmt.Println("  status             Show the current running activity and elapsed time")
 	fmt.Println("  watch              Live terminal progress display (Ctrl+C quits cleanly)")
 	fmt.Println("  history            Show all tracked activities in chronological order")
-	fmt.Println("  stats [period]     Show activity sum and total time spent")
-	fmt.Println("                     Flags:")
+	fmt.Println("  stats [period] [activity]   Show statistics for a period or a specific activity")
+	fmt.Println("                     Period flags:")
 	fmt.Println("                       -d, --day     Today's statistics (default)")
 	fmt.Println("                       -w, --week    This week's statistics")
 	fmt.Println("                       -m, --month   This month's statistics")
 	fmt.Println("                       -a, --all     All-time statistics")
+	fmt.Println("                     Activity filter (optional):")
+	fmt.Println("                       Provide an activity name to see focused stats for it")
 	fmt.Println("  help, -h, --help   Show this help message")
 	fmt.Println()
 	fmt.Println("EXAMPLES:")
@@ -82,4 +95,19 @@ func showHelp() {
 	fmt.Println("  tick stats -w")
 	fmt.Println("  tick stats -m")
 	fmt.Println("  tick stats -a")
+	fmt.Println("  tick stats -w programming")
+	fmt.Println("  tick stats -m coding")
+	fmt.Println("  tick stats programming")
+}
+
+// isPeriodFlag returns true if s is a recognized period flag or keyword.
+func isPeriodFlag(s string) bool {
+	switch strings.ToLower(s) {
+	case "-d", "--day", "day", "today", "d",
+		"-w", "--week", "week", "w",
+		"-m", "--month", "month", "m",
+		"-a", "--all", "all", "a":
+		return true
+	}
+	return false
 }
